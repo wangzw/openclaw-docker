@@ -36,15 +36,16 @@ jobs:
       - name: Check for changes
         id: check
         run: |
-          # Always build everything on version tags or when forced
-          if [[ "$GITHUB_REF" == refs/tags/* ]] || [[ "${{ inputs.force-build-all }}" == "true" ]]; then
+          # Always build everything on version tags, first push, or when forced
+          BEFORE="${{ github.event.before }}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]] || [[ "${{ inputs.force-build-all }}" == "true" ]] || [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
             echo "base-changed=true" >> "$GITHUB_OUTPUT"
             echo 'images-matrix=["gateway","node-system","node-vnc"]' >> "$GITHUB_OUTPUT"
             echo "has-images=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
+          CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
 
           if echo "$CHANGED" | grep -q '^images/base/'; then
             echo "base-changed=true" >> "$GITHUB_OUTPUT"
