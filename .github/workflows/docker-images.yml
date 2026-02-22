@@ -1,0 +1,277 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      force-build-all:
+        description: "Force build all images regardless of changes"
+        type: boolean
+        default: false
+      openclaw-pkg-version:
+        description: "openclaw npm package version"
+        type: string
+        default: "latest"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/wangzw/openclaw
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      base-changed: ${{ steps.check.outputs.base-changed }}
+      images-matrix: ${{ steps.check.outputs.images-matrix }}
+      has-images: ${{ steps.check.outputs.has-images }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: check
+        run: |
+          # Always build everything on version tags or when forced
+          if [[ "$GITHUB_REF" == refs/tags/* ]] || [[ "${{ inputs.force-build-all }}" == "true" ]]; then
+            echo "base-changed=true" >> "$GITHUB_OUTPUT"
+            echo 'images-matrix=["gateway","node-system","node-vnc"]' >> "$GITHUB_OUTPUT"
+            echo "has-images=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")
+
+          if echo "$CHANGED" | grep -q '^images/base/'; then
+            echo "base-changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "base-changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          images=()
+          for img in gateway node-system node-vnc; do
+            if echo "$CHANGED" | grep -q "^images/$img/"; then
+              images+=("\"$img\"")
+            fi
+          done
+
+          if [ ${#images[@]} -gt 0 ]; then
+            echo "images-matrix=[$(IFS=,; echo "${images[*]}")]" >> "$GITHUB_OUTPUT"
+            echo "has-images=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "images-matrix=[]" >> "$GITHUB_OUTPUT"
+            echo "has-images=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-base:
+    runs-on: ${{ matrix.platform.runner }}
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.base-changed == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-24.04
+            arch: linux/amd64
+            slug: amd64
+          - runner: ubuntu-24.04-arm
+            arch: linux/arm64
+            slug: arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./images/base
+          platforms: ${{ matrix.platform.arch }}
+          build-args: |
+            OPENCLAW_PKG_VERSION=${{ inputs.openclaw-pkg-version || 'latest' }}
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}-base,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-base-${{ matrix.platform.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-base:
+    runs-on: ubuntu-24.04
+    needs: [check-changes, build-base]
+    if: ${{ needs.check-changes.outputs.base-changed == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-base-*
+          merge-multiple: true
+          path: /tmp/digests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-base
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE_PREFIX }}-base@sha256:%s ' *)
+
+      - name: Inspect image
+        run: docker buildx imagetools inspect $(jq -cr '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+
+  build-images:
+    runs-on: ${{ matrix.platform.runner }}
+    needs: [check-changes, merge-base]
+    if: ${{ !cancelled() && !failure() && needs.check-changes.outputs.has-images == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        image: ${{ fromJSON(needs.check-changes.outputs.images-matrix) }}
+        platform:
+          - runner: ubuntu-24.04
+            arch: linux/amd64
+            slug: amd64
+          - runner: ubuntu-24.04-arm
+            arch: linux/arm64
+            slug: arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./images/${{ matrix.image }}
+          platforms: ${{ matrix.platform.arch }}
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image }}-${{ matrix.platform.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-images:
+    runs-on: ubuntu-24.04
+    needs: [check-changes, build-images]
+    if: ${{ !cancelled() && !failure() && needs.check-changes.outputs.has-images == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        image: ${{ fromJSON(needs.check-changes.outputs.images-matrix) }}
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-${{ matrix.image }}-*
+          merge-multiple: true
+          path: /tmp/digests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE_PREFIX }}-${{ matrix.image }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: docker buildx imagetools inspect $(jq -cr '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")

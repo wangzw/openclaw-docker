@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw VNC</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #top_bar {
+            background: #16213e;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #0f3460;
+            z-index: 10;
+            flex-shrink: 0;
+        }
+        #top_bar .title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #53a8b6;
+        }
+        #top_bar .controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        #top_bar button {
+            background: #0f3460;
+            color: #e0e0e0;
+            border: 1px solid #53a8b6;
+            border-radius: 4px;
+            padding: 4px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #top_bar button:hover { background: #53a8b6; color: #1a1a2e; }
+        #status {
+            font-size: 12px;
+            color: #888;
+        }
+        #status.connected { color: #4caf50; }
+        #status.disconnected { color: #f44336; }
+        #status.connecting { color: #ff9800; }
+        #screen {
+            flex: 1;
+            overflow: hidden;
+            background: #000;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 5;
+        }
+        #loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #333;
+            border-top: 3px solid #53a8b6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loading.hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div id="top_bar">
+        <span class="title">OpenClaw VNC</span>
+        <span id="status" class="connecting">Connecting...</span>
+        <div class="controls">
+            <button id="fullscreenBtn" title="Toggle fullscreen">Fullscreen</button>
+            <button id="ctrlAltDelBtn" title="Send Ctrl+Alt+Del">Ctrl+Alt+Del</button>
+            <button id="reconnectBtn" title="Reconnect">Reconnect</button>
+        </div>
+    </div>
+    <div id="screen">
+        <div id="loading">
+            <div class="spinner"></div>
+            <div>Connecting to VNC...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import RFB from './core/rfb.js';
+
+        const host = window.location.hostname;
+        const port = window.location.port || '6080';
+        const password = (new URLSearchParams(window.location.search)).get('password') || 'openclaw';
+        const path = 'websockify';
+
+        const statusEl = document.getElementById('status');
+        const loadingEl = document.getElementById('loading');
+        const screenEl = document.getElementById('screen');
+
+        let rfb = null;
+
+        function setStatus(text, cls) {
+            statusEl.textContent = text;
+            statusEl.className = cls;
+        }
+
+        function connect() {
+            if (rfb) {
+                rfb.disconnect();
+                rfb = null;
+            }
+
+            setStatus('Connecting...', 'connecting');
+            loadingEl.classList.remove('hidden');
+
+            const url = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${host}:${port}/${path}`;
+
+            rfb = new RFB(screenEl, url, {
+                credentials: { password: password },
+            });
+
+            rfb.scaleViewport = true;
+            rfb.resizeSession = true;
+
+            rfb.addEventListener('connect', () => {
+                setStatus('Connected', 'connected');
+                loadingEl.classList.add('hidden');
+            });
+
+            rfb.addEventListener('disconnect', (e) => {
+                const clean = e.detail.clean;
+                setStatus(clean ? 'Disconnected' : 'Connection lost', 'disconnected');
+                loadingEl.classList.add('hidden');
+                rfb = null;
+                if (!clean) {
+                    setTimeout(connect, 3000);
+                }
+            });
+
+            rfb.addEventListener('credentialsrequired', () => {
+                rfb.sendCredentials({ password: password });
+            });
+        }
+
+        // Controls
+        document.getElementById('fullscreenBtn').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        document.getElementById('ctrlAltDelBtn').addEventListener('click', () => {
+            if (rfb) rfb.sendCtrlAltDel();
+        });
+
+        document.getElementById('reconnectBtn').addEventListener('click', () => {
+            connect();
+        });
+
+        // Start connection
+        connect();
+    </script>
+</body>
+</html>

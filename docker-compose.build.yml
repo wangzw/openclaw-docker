@@ -1,0 +1,26 @@
+services:
+  openclaw-base:
+    build:
+      context: ./images/base
+      dockerfile: Dockerfile
+      args:
+        OPENCLAW_PKG_VERSION: ${OPENCLAW_PKG_VERSION:-latest}
+    image: ghcr.io/wangzw/openclaw-base:${OPENCLAW_VERSION:-latest}
+
+  openclaw-gateway:
+    build:
+      context: ./images/gateway
+      dockerfile: Dockerfile
+    image: ghcr.io/wangzw/openclaw-gateway:${OPENCLAW_VERSION:-latest}
+
+  openclaw-node-system:
+    build:
+      context: ./images/node-system
+      dockerfile: Dockerfile
+    image: ghcr.io/wangzw/openclaw-node-system:${OPENCLAW_VERSION:-latest}
+
+  openclaw-node-vnc:
+    build:
+      context: ./images/node-vnc
+      dockerfile: Dockerfile
+    image: ghcr.io/wangzw/openclaw-node-vnc:${OPENCLAW_VERSION:-latest}

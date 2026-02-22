@@ -1,0 +1,90 @@
+services:
+  # ============================================================
+  # Gateway - central hub
+  # ============================================================
+  openclaw-gateway:
+    image: ghcr.io/wangzw/openclaw-gateway:${OPENCLAW_VERSION:-latest}
+    container_name: openclaw-gateway
+    hostname: openclaw-gateway
+    init: true
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:${OPENCLAW_GATEWAY_PORT:-18789}"
+      - "${OPENCLAW_OAUTH_PORT:-1455}:${OPENCLAW_OAUTH_PORT:-1455}"
+    environment:
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
+      - OPENCLAW_OAUTH_PORT=${OPENCLAW_OAUTH_PORT:-1455}
+      - OPENCLAW_HOME=${OPENCLAW_HOME:-/var/lib/openclaw}
+      - OPENCLAW_STATE_DIR=${OPENCLAW_STATE_DIR:-/var/lib/openclaw/state}
+      - OPENCLAW_CONFIG_PATH=${OPENCLAW_CONFIG_PATH:-/etc/openclaw/config.json}
+      - NODE_ENV=${NODE_ENV:-production}
+      - AUTO_APPROVE_NAMES=${OPENCLAW_SYSTEM_NODE_NAME:-system-node},${OPENCLAW_VNC_NODE_NAME:-vnc-node}
+    volumes:
+      - ./data/gateway/data:/var/lib/openclaw
+      - ./data/gateway/config:/etc/openclaw
+      - ./data/agents:/var/lib/openclaw-agents
+    networks:
+      - openclaw-net
+    restart: unless-stopped
+
+  # ============================================================
+  # System Node - CLI tools for system.* operations
+  # ============================================================
+  openclaw-node-system:
+    image: ghcr.io/wangzw/openclaw-node-system:${OPENCLAW_VERSION:-latest}
+    container_name: openclaw-node-system
+    hostname: openclaw-node-system
+    environment:
+      - OPENCLAW_GATEWAY_HOST=openclaw-gateway
+      - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - OPENCLAW_NODE_NAME=${OPENCLAW_SYSTEM_NODE_NAME:-system-node}
+      - OPENCLAW_HOME=/var/lib/openclaw
+      - OPENCLAW_STATE_DIR=/var/lib/openclaw/state
+      - OPENCLAW_CONFIG_PATH=/etc/openclaw/config.json
+      - NODE_ENV=${NODE_ENV:-production}
+    volumes:
+      - ./data/node-system/data:/var/lib/openclaw
+      - ./data/agents:/var/lib/openclaw-agents
+    networks:
+      - openclaw-net
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================================
+  # VNC Node - browser automation with Chrome
+  # ============================================================
+  openclaw-node-vnc:
+    image: ghcr.io/wangzw/openclaw-node-vnc:${OPENCLAW_VERSION:-latest}
+    container_name: openclaw-node-vnc
+    hostname: openclaw-node-vnc
+    ports:
+      - "${VNC_PORT:-5901}:5901"
+      - "${NO_VNC_PORT:-6080}:6080"
+    environment:
+      - OPENCLAW_GATEWAY_HOST=openclaw-gateway
+      - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - OPENCLAW_NODE_NAME=${OPENCLAW_VNC_NODE_NAME:-vnc-node}
+      - OPENCLAW_HOME=/var/lib/openclaw
+      - OPENCLAW_STATE_DIR=/var/lib/openclaw/state
+      - OPENCLAW_CONFIG_PATH=/etc/openclaw/config.json
+      - NODE_ENV=${NODE_ENV:-production}
+      - VNC_PW=${VNC_PW:-openclaw}
+      - VNC_RESOLUTION=${VNC_RESOLUTION:-1280x1024}
+      - DISPLAY=:1
+    volumes:
+      - ./data/node-vnc/data:/var/lib/openclaw
+    networks:
+      - openclaw-net
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
+    shm_size: '2gb'
+    restart: unless-stopped
+
+networks:
+  openclaw-net:
+    driver: bridge
