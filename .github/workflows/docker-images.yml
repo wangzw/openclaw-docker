@@ -38,7 +38,7 @@ jobs:
         run: |
           # Always build everything on version tags, first push, or when forced
           BEFORE="${{ github.event.before }}"
-          if [[ "$GITHUB_REF" == refs/tags/* ]] || [[ "${{ inputs.force-build-all }}" == "true" ]] || [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/* ]] || [[ "${{ inputs.force-build-all }}" == "true" ]] || [[ -z "$BEFORE" ]] || [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
             echo "base-changed=true" >> "$GITHUB_OUTPUT"
             echo 'images-matrix=["gateway","node-system","node-vnc"]' >> "$GITHUB_OUTPUT"
             echo "has-images=true" >> "$GITHUB_OUTPUT"
