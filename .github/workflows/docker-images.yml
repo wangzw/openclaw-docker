@@ -3,7 +3,6 @@ name: Build and Push Docker Images
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       force-build-all:
@@ -26,6 +25,7 @@ jobs:
       base-changed: ${{ steps.check.outputs.base-changed }}
       images-matrix: ${{ steps.check.outputs.images-matrix }}
       has-images: ${{ steps.check.outputs.has-images }}
+      image-tag: ${{ steps.resolve-version.outputs.image-tag }}
 
     steps:
       - name: Checkout repository
@@ -33,12 +33,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve openclaw version and image tag
+        id: resolve-version
+        run: |
+          PKG_VERSION="${{ inputs.openclaw-pkg-version || 'latest' }}"
+          if [ "$PKG_VERSION" = "latest" ]; then
+            OPENCLAW_VERSION=$(npm view openclaw version)
+          else
+            OPENCLAW_VERSION="$PKG_VERSION"
+          fi
+          DATE_TAG=$(date -u +%Y%m%d)
+          IMAGE_TAG="${OPENCLAW_VERSION}-${DATE_TAG}"
+          echo "image-tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Image tag: $IMAGE_TAG"
+
       - name: Check for changes
         id: check
         run: |
-          # Always build everything on version tags, first push, or when forced
+          # Always build everything on first push or when forced
           BEFORE="${{ github.event.before }}"
-          if [[ "$GITHUB_REF" == refs/tags/* ]] || [[ "${{ inputs.force-build-all }}" == "true" ]] || [[ -z "$BEFORE" ]] || [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+          if [[ "${{ inputs.force-build-all }}" == "true" ]] || [[ -z "$BEFORE" ]] || [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
             echo "base-changed=true" >> "$GITHUB_OUTPUT"
             echo 'images-matrix=["gateway","node-system","node-vnc"]' >> "$GITHUB_OUTPUT"
             echo "has-images=true" >> "$GITHUB_OUTPUT"
@@ -157,9 +171,7 @@ jobs:
           images: ${{ env.IMAGE_PREFIX }}-base
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern=v{{version}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.check-changes.outputs.image-tag }}
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
@@ -263,9 +275,7 @@ jobs:
           images: ${{ env.IMAGE_PREFIX }}-${{ matrix.image }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern=v{{version}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.check-changes.outputs.image-tag }}
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
