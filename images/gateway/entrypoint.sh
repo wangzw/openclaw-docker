@@ -15,6 +15,9 @@ if [ ! -f "$ONBOARD_MARKER" ]; then
     echo "[openclaw-gateway] Setting agents.defaults.workspace=$WORKSPACE"
     openclaw config set agents.defaults.workspace "$WORKSPACE"
 
+    echo "[openclaw-gateway] Allowing Control UI from any origin (Docker LAN)..."
+    openclaw config set gateway.controlUi.allowedOrigins "*"
+
     echo "[openclaw-gateway] Running onboard..."
     # onboard writes config then tries to connect to the gateway websocket,
     # which isn't running yet — ignore that expected connection error
