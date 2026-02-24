@@ -12,15 +12,21 @@ services:
       context: ./images/gateway
       dockerfile: Dockerfile
     image: ghcr.io/wangzw/openclaw-gateway:${OPENCLAW_VERSION:-latest}
+    depends_on:
+      - openclaw-base
 
   openclaw-node-system:
     build:
       context: ./images/node-system
       dockerfile: Dockerfile
     image: ghcr.io/wangzw/openclaw-node-system:${OPENCLAW_VERSION:-latest}
+    depends_on:
+      - openclaw-base
 
   openclaw-node-vnc:
     build:
       context: ./images/node-vnc
       dockerfile: Dockerfile
     image: ghcr.io/wangzw/openclaw-node-vnc:${OPENCLAW_VERSION:-latest}
+    depends_on:
+      - openclaw-base

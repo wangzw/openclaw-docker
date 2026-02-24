@@ -29,6 +29,7 @@ RUN dnf install -y epel-release && \
         tmux \
         lsof \
         socat \
+        unzip \
         golang \
     && dnf clean all
 
@@ -42,6 +43,48 @@ ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}
 ENV HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
 ENV HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
 ENV HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
+
+# ---------- Skill dependencies (Homebrew) ----------
+# Skipped macOS-only: imsg, peekaboo
+# Skipped broken on Linux ARM64: sag (ebitengine/oto build failure)
+ENV HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
+USER linuxbrew
+RUN brew install \
+        jq \
+        ripgrep \
+        ffmpeg \
+        uv \
+        himalaya \
+        gemini-cli \
+        openai-whisper \
+        spotify_player \
+        1password-cli \
+    && brew install steipete/tap/camsnap \
+    && brew install steipete/tap/summarize \
+    && brew install steipete/tap/gogcli \
+    && brew install steipete/tap/gifgrep \
+    && brew install steipete/tap/songsee \
+    && brew install steipete/tap/spogo \
+    && brew install steipete/tap/goplaces \
+    && brew install steipete/tap/ordercli \
+    && brew install steipete/tap/wacli \
+    && brew install openhue/cli/openhue-cli \
+    && brew install xdevplatform/tap/xurl \
+    && brew cleanup --prune=all
+USER root
+
+# ---------- Skill dependencies (Go) ----------
+ENV GOPATH=/root/go
+ENV PATH="${GOPATH}/bin:${PATH}"
+RUN go install github.com/steipete/blucli/cmd/blu@latest && \
+    go install github.com/steipete/sonoscli/cmd/sonos@latest && \
+    go install github.com/steipete/eightctl/cmd/eightctl@latest && \
+    go install github.com/Hyaxia/blogwatcher/cmd/blogwatcher@latest && \
+    rm -rf /root/go/pkg /root/go/src
+
+# ---------- Skill dependencies (Node) ----------
+RUN npm install -g mcporter @steipete/oracle clawhub && \
+    rm -rf /root/.npm /tmp/*
 
 # ---------- Install openclaw ----------
 ARG OPENCLAW_PKG_VERSION=latest

@@ -39,7 +39,7 @@ RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/noVNC && \
 COPY index.html /opt/noVNC/index.html
 
 # ---------- Supervisord ----------
-RUN pip3 install supervisor && \
+RUN uv pip install --system supervisor && \
     mkdir -p /etc/supervisor/conf.d /var/log/supervisor
 
 # ---------- VNC-specific environment ----------

@@ -173,7 +173,7 @@ cmd_deploy() {
     # commands like "approvals set". Trigger a connection attempt
     # so it shows up as pending, then approve it.
     info "Pairing gateway-local CLI..."
-    docker exec openclaw-gateway openclaw devices list --json 2>/dev/null || true
+    docker exec openclaw-gateway openclaw devices list --json >/dev/null 2>&1 || true
     sleep 2
     cmd_approve
     echo ""
@@ -253,7 +253,7 @@ for entry in data.get('pending', []):
 
     while IFS=' ' read -r request_id name; do
         info "Approving: $name ($request_id)..."
-        if docker exec openclaw-gateway openclaw devices approve "$request_id" --token "$token" 2>&1; then
+        if docker exec openclaw-gateway openclaw devices approve "$request_id" --token "$token" >/dev/null 2>&1; then
             ok "Approved: $name"
             approved=$((approved + 1))
         else
