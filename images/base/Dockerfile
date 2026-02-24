@@ -45,7 +45,7 @@ ENV HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
 ENV HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
 
 # ---------- Skill dependencies (Homebrew) ----------
-# Skipped macOS-only: imsg, peekaboo
+# Skipped macOS-only: imsg, camsnap, peekaboo
 # Skipped broken on Linux ARM64: sag (ebitengine/oto build failure)
 ENV HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
 USER linuxbrew
@@ -59,7 +59,6 @@ RUN brew install \
         openai-whisper \
         spotify_player \
         1password-cli \
-    && brew install steipete/tap/camsnap \
     && brew install steipete/tap/gogcli \
     && brew install steipete/tap/gifgrep \
     && brew install steipete/tap/songsee \
