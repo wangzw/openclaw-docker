@@ -59,8 +59,10 @@ if [ -n "$PKG_VERSION" ]; then
 fi
 
 build_locally() {
-    info "Building base image first..."
+    info "Building base image..."
     docker compose -f docker-compose.build.yml build openclaw-base
+    info "Building runtime image..."
+    docker compose -f docker-compose.build.yml build openclaw-runtime
     info "Building service images..."
     docker compose -f docker-compose.build.yml build openclaw-gateway openclaw-node-system openclaw-node-vnc
     ok "All images built successfully."

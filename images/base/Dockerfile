@@ -1,7 +1,7 @@
 FROM rockylinux:9
 
 LABEL maintainer="openclaw"
-LABEL description="OpenClaw base image — Rocky Linux 9 + Node.js 22 + openclaw"
+LABEL description="OpenClaw base image — Rocky Linux 9 + Node.js 22 + tools"
 
 # ---------- Node.js 22 LTS ----------
 RUN curl -fsSL https://rpm.nodesource.com/setup_22.x | bash - && \
@@ -83,16 +83,3 @@ RUN go install github.com/steipete/blucli/cmd/blu@latest && \
 # ---------- Skill dependencies (Node) ----------
 RUN npm install -g mcporter @steipete/oracle clawhub && \
     rm -rf /root/.npm /tmp/*
-
-# ---------- Install openclaw ----------
-ARG OPENCLAW_PKG_VERSION=latest
-RUN npm install -g openclaw@${OPENCLAW_PKG_VERSION} && \
-    rm -rf /root/.npm /tmp/*
-
-# ---------- Common environment ----------
-ENV OPENCLAW_HOME=/var/lib/openclaw
-ENV OPENCLAW_STATE_DIR=/var/lib/openclaw/state
-ENV OPENCLAW_CONFIG_PATH=/etc/openclaw/config.json
-ENV NODE_ENV=production
-
-RUN mkdir -p "$OPENCLAW_HOME" "$OPENCLAW_STATE_DIR" /etc/openclaw

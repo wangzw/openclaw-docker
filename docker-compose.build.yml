@@ -3,9 +3,17 @@ services:
     build:
       context: ./images/base
       dockerfile: Dockerfile
+    image: ghcr.io/wangzw/openclaw-base:${OPENCLAW_VERSION:-latest}
+
+  openclaw-runtime:
+    build:
+      context: ./images/runtime
+      dockerfile: Dockerfile
       args:
         OPENCLAW_PKG_VERSION: ${OPENCLAW_PKG_VERSION:-latest}
-    image: ghcr.io/wangzw/openclaw-base:${OPENCLAW_VERSION:-latest}
+    image: ghcr.io/wangzw/openclaw-runtime:${OPENCLAW_VERSION:-latest}
+    depends_on:
+      - openclaw-base
 
   openclaw-gateway:
     build:
@@ -13,7 +21,7 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/wangzw/openclaw-gateway:${OPENCLAW_VERSION:-latest}
     depends_on:
-      - openclaw-base
+      - openclaw-runtime
 
   openclaw-node-system:
     build:
@@ -21,7 +29,7 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/wangzw/openclaw-node-system:${OPENCLAW_VERSION:-latest}
     depends_on:
-      - openclaw-base
+      - openclaw-runtime
 
   openclaw-node-vnc:
     build:
@@ -29,4 +37,4 @@ services:
       dockerfile: Dockerfile
     image: ghcr.io/wangzw/openclaw-node-vnc:${OPENCLAW_VERSION:-latest}
     depends_on:
-      - openclaw-base
+      - openclaw-runtime

@@ -9,6 +9,10 @@ on:
         description: "Force build all images regardless of changes"
         type: boolean
         default: false
+      force-build-runtime:
+        description: "Force build runtime + service images (skip base)"
+        type: boolean
+        default: false
       openclaw-pkg-version:
         description: "openclaw npm package version"
         type: string
@@ -23,9 +27,11 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       base-changed: ${{ steps.check.outputs.base-changed }}
+      runtime-changed: ${{ steps.check.outputs.runtime-changed }}
       images-matrix: ${{ steps.check.outputs.images-matrix }}
       has-images: ${{ steps.check.outputs.has-images }}
       image-tag: ${{ steps.resolve-version.outputs.image-tag }}
+      date-tag: ${{ steps.resolve-version.outputs.date-tag }}
 
     steps:
       - name: Checkout repository
@@ -45,6 +51,7 @@ jobs:
           DATE_TAG=$(date -u +%Y%m%d)
           IMAGE_TAG="${OPENCLAW_VERSION}-${DATE_TAG}"
           echo "image-tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "date-tag=$DATE_TAG" >> "$GITHUB_OUTPUT"
           echo "Image tag: $IMAGE_TAG"
 
       - name: Check for changes
@@ -54,17 +61,37 @@ jobs:
           BEFORE="${{ github.event.before }}"
           if [[ "${{ inputs.force-build-all }}" == "true" ]] || [[ -z "$BEFORE" ]] || [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
             echo "base-changed=true" >> "$GITHUB_OUTPUT"
+            echo "runtime-changed=true" >> "$GITHUB_OUTPUT"
             echo 'images-matrix=["gateway","node-system","node-vnc"]' >> "$GITHUB_OUTPUT"
             echo "has-images=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
+          BASE_CHANGED=false
+          RUNTIME_CHANGED=false
 
           if echo "$CHANGED" | grep -q '^images/base/'; then
-            echo "base-changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "base-changed=false" >> "$GITHUB_OUTPUT"
+            BASE_CHANGED=true
+            RUNTIME_CHANGED=true
+          fi
+
+          if echo "$CHANGED" | grep -q '^images/runtime/'; then
+            RUNTIME_CHANGED=true
+          fi
+
+          if [[ "${{ inputs.force-build-runtime }}" == "true" ]]; then
+            RUNTIME_CHANGED=true
+          fi
+
+          echo "base-changed=$BASE_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "runtime-changed=$RUNTIME_CHANGED" >> "$GITHUB_OUTPUT"
+
+          # When runtime changes, all service images must rebuild
+          if [ "$RUNTIME_CHANGED" = "true" ]; then
+            echo 'images-matrix=["gateway","node-system","node-vnc"]' >> "$GITHUB_OUTPUT"
+            echo "has-images=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           images=()
@@ -120,8 +147,6 @@ jobs:
         with:
           context: ./images/base
           platforms: ${{ matrix.platform.arch }}
-          build-args: |
-            OPENCLAW_PKG_VERSION=${{ inputs.openclaw-pkg-version || 'latest' }}
           outputs: type=image,name=${{ env.IMAGE_PREFIX }}-base,push-by-digest=true,name-canonical=true,push=true
 
       - name: Export digest
@@ -171,7 +196,7 @@ jobs:
           images: ${{ env.IMAGE_PREFIX }}-base
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ needs.check-changes.outputs.image-tag }}
+            type=raw,value=${{ needs.check-changes.outputs.date-tag }}
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
@@ -183,9 +208,110 @@ jobs:
       - name: Inspect image
         run: docker buildx imagetools inspect $(jq -cr '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
 
-  build-images:
+  build-runtime:
     runs-on: ${{ matrix.platform.runner }}
     needs: [check-changes, merge-base]
+    if: ${{ !cancelled() && !failure() && needs.check-changes.outputs.runtime-changed == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-24.04
+            arch: linux/amd64
+            slug: amd64
+          - runner: ubuntu-24.04-arm
+            arch: linux/arm64
+            slug: arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./images/runtime
+          platforms: ${{ matrix.platform.arch }}
+          build-args: |
+            OPENCLAW_PKG_VERSION=${{ inputs.openclaw-pkg-version || 'latest' }}
+          outputs: type=image,name=${{ env.IMAGE_PREFIX }}-runtime,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-runtime-${{ matrix.platform.slug }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-runtime:
+    runs-on: ubuntu-24.04
+    needs: [check-changes, build-runtime]
+    if: ${{ !cancelled() && !failure() && needs.check-changes.outputs.runtime-changed == 'true' }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digest-runtime-*
+          merge-multiple: true
+          path: /tmp/digests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-runtime
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.check-changes.outputs.image-tag }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE_PREFIX }}-runtime@sha256:%s ' *)
+
+      - name: Inspect image
+        run: docker buildx imagetools inspect $(jq -cr '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+
+  build-images:
+    runs-on: ${{ matrix.platform.runner }}
+    needs: [check-changes, merge-runtime]
     if: ${{ !cancelled() && !failure() && needs.check-changes.outputs.has-images == 'true' }}
     permissions:
       contents: read

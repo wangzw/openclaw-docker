@@ -1,4 +1,4 @@
-FROM ghcr.io/wangzw/openclaw-base:latest
+FROM ghcr.io/wangzw/openclaw-runtime:latest
 
 LABEL maintainer="openclaw"
 LABEL description="OpenClaw VNC Node on Rocky Linux 9 - Xvnc + Chromium + noVNC"

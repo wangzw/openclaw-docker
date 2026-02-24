@@ -27,9 +27,9 @@ jobs:
         run: |
           VERSION="${{ steps.npm-version.outputs.version }}"
 
-          # List tags for the base image package and check for version prefix
+          # List tags for the runtime image package and check for version prefix
           TAGS=$(gh api \
-            "/orgs/${{ github.repository_owner }}/packages/container/openclaw-base/versions" \
+            "/orgs/${{ github.repository_owner }}/packages/container/openclaw-runtime/versions" \
             --paginate --jq '.[].metadata.container.tags[]' 2>/dev/null || true)
 
           if echo "$TAGS" | grep -q "^${VERSION}-"; then
@@ -49,5 +49,5 @@ jobs:
           echo "Triggering build for openclaw $VERSION"
           gh workflow run docker-images.yml \
             --repo "${{ github.repository }}" \
-            -f force-build-all=true \
+            -f force-build-runtime=true \
             -f "openclaw-pkg-version=$VERSION"
