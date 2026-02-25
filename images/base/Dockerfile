@@ -29,6 +29,8 @@ RUN dnf install -y epel-release && \
         socat \
         unzip \
         golang \
+        poppler-utils \
+        tesseract \
     && dnf clean all
 
 # ---------- Homebrew ----------
@@ -49,6 +51,7 @@ ENV HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
 ENV HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
 USER linuxbrew
 RUN brew install \
+        gh \
         jq \
         ripgrep \
         ffmpeg \
@@ -79,6 +82,11 @@ RUN go install github.com/steipete/blucli/cmd/blu@latest && \
     go install github.com/Hyaxia/blogwatcher/cmd/blogwatcher@latest && \
     rm -rf /root/go/pkg /root/go/src
 
+# ---------- Skill dependencies (Python) ----------
+ENV PATH="/root/.local/bin:${PATH}"
+RUN uv tool install nano-pdf && \
+    uv tool install obsidian-cli
+
 # ---------- Skill dependencies (Node) ----------
-RUN npm install -g mcporter @steipete/oracle clawhub && \
+RUN npm install -g mcporter @steipete/oracle @steipete/summarize clawhub && \
     rm -rf /root/.npm /tmp/*
