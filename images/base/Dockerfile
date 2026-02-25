@@ -31,6 +31,7 @@ RUN dnf install -y epel-release && \
         golang \
         poppler-utils \
         tesseract \
+        file \
     && dnf clean all
 
 # ---------- Homebrew ----------

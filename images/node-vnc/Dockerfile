@@ -34,8 +34,11 @@ RUN mv /usr/bin/chromium-browser /usr/bin/chromium-browser.real && \
     chmod +x /usr/bin/chromium-browser
 
 # ---------- noVNC (web-based VNC access) ----------
+# websockify must use system Python; Homebrew Python may crash with SIGILL
+# on aarch64 Docker (CPU extension mismatch).
 RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/noVNC && \
-    git clone --depth 1 https://github.com/novnc/websockify.git /opt/noVNC/utils/websockify
+    git clone --depth 1 https://github.com/novnc/websockify.git /opt/noVNC/utils/websockify && \
+    sed -i 's|python3|/usr/bin/python3.9|' /opt/noVNC/utils/websockify/run
 COPY index.html /opt/noVNC/index.html
 
 # ---------- Supervisord ----------
