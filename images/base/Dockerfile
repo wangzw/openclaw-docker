@@ -85,7 +85,8 @@ RUN go install github.com/steipete/blucli/cmd/blu@latest && \
 # ---------- Skill dependencies (Python) ----------
 ENV PATH="/root/.local/bin:${PATH}"
 RUN uv tool install nano-pdf && \
-    uv tool install obsidian-cli
+    uv tool install obsidian-cli && \
+    ln -sf /root/.local/bin/obsidian /root/.local/bin/obsidian-cli
 
 # ---------- Skill dependencies (Node) ----------
 RUN npm install -g mcporter @steipete/oracle @steipete/summarize clawhub && \
