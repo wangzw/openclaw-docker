@@ -10,8 +10,7 @@ ENV OPENCLAW_OAUTH_PORT=1455
 # ---------- Entrypoint & scripts ----------
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
-COPY auto-approve-nodes.sh /usr/local/bin/auto-approve-nodes.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/healthcheck.sh /usr/local/bin/auto-approve-nodes.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/healthcheck.sh
 
 # ---------- Ports ----------
 EXPOSE 18789

@@ -16,7 +16,7 @@ if [ ! -f "$ONBOARD_MARKER" ]; then
     openclaw config set agents.defaults.workspace "$WORKSPACE"
 
     echo "[openclaw-gateway] Allowing Control UI from any origin (Docker LAN)..."
-    openclaw config set gateway.controlUi.allowedOrigins "*"
+    openclaw config set gateway.controlUi.allowedOrigins '["*"]'
 
     echo "[openclaw-gateway] Running onboard..."
     # onboard writes config then tries to connect to the gateway websocket,
@@ -33,9 +33,6 @@ fi
 
 echo "[openclaw-gateway] Starting OpenClaw Gateway..."
 echo "[openclaw-gateway] Port: ${OPENCLAW_GATEWAY_PORT:-18789}"
-
-# Auto-approve nodes in the background
-/usr/local/bin/auto-approve-nodes.sh &
 
 # Run gateway in foreground; forward signals so it shuts down cleanly
 openclaw gateway run \

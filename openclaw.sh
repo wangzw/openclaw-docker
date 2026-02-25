@@ -113,9 +113,19 @@ configure_vnc_node() {
     gw_config_set gateway.nodes.browser.mode manual
     wait_all_healthy
     info "Setting exec approvals on VNC node (allow chromium)..."
-    echo '{"version":1,"defaults":{},"agents":{"*":{"allowlist":[{"pattern":"/usr/bin/chromium-browser"}]}}}' \
-        | docker exec -i openclaw-gateway openclaw approvals set --stdin --node "$node_name" --token "$token"
-    ok "VNC node configured."
+    local retries=10
+    local i=0
+    while [ $i -lt $retries ]; do
+        if echo '{"version":1,"defaults":{},"agents":{"*":{"allowlist":[{"pattern":"/usr/bin/chromium-browser"}]}}}' \
+            | docker exec -i openclaw-gateway openclaw approvals set --stdin --node "$node_name" --token "$token" 2>/dev/null; then
+            ok "VNC node configured."
+            return
+        fi
+        sleep 3
+        i=$((i + 1))
+        info "Waiting for VNC node to reconnect... ($i/$retries)"
+    done
+    warn "Could not set VNC node approvals — node may not be connected."
 }
 
 print_summary() {
@@ -166,7 +176,6 @@ cmd_deploy() {
     echo ""
 
     wait_for_gateway
-    wait_all_healthy
     echo ""
 
     # The gateway-local CLI needs pairing before it can run
@@ -176,6 +185,67 @@ cmd_deploy() {
     docker exec openclaw-gateway openclaw devices list --json >/dev/null 2>&1 || true
     sleep 2
     cmd_approve
+    echo ""
+
+    # Poll and approve node pairing requests until both expected
+    # nodes are paired (or timeout after ~90s).
+    local system_node="${OPENCLAW_SYSTEM_NODE_NAME:-system-node}"
+    local vnc_node="${OPENCLAW_VNC_NODE_NAME:-vnc-node}"
+    local token="${OPENCLAW_GATEWAY_TOKEN:-}"
+    info "Waiting for nodes to pair ($system_node, $vnc_node)..."
+    local approve_timeout=30  # iterations × 3s sleep ≈ 90s
+    local approve_i=0
+    while [ $approve_i -lt $approve_timeout ]; do
+        # Single docker exec: approve pending devices and report paired status
+        local result
+        result=$(docker exec openclaw-gateway openclaw devices list --json 2>/dev/null \
+            | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+expected = {'${system_node}', '${vnc_node}'}
+# Collect request IDs to approve
+for e in data.get('pending', []):
+    name = e.get('displayName') or e.get('clientId', '')
+    rid = e.get('requestId', '')
+    if rid:
+        print('APPROVE ' + rid + ' ' + name)
+# Check which expected nodes are paired
+paired = {e.get('displayName', '') for e in data.get('paired', [])}
+if expected <= paired:
+    print('ALL_PAIRED')
+else:
+    missing = expected - paired
+    print('MISSING ' + ','.join(sorted(missing)))
+" 2>/dev/null || true)
+
+        # Process approvals
+        while IFS=' ' read -r action arg1 arg2; do
+            if [ "$action" = "APPROVE" ]; then
+                info "Approving: $arg2 ($arg1)"
+                docker exec openclaw-gateway openclaw devices approve "$arg1" --token "$token" >/dev/null 2>&1 || true
+            fi
+        done <<< "$result"
+
+        if echo "$result" | grep -q '^ALL_PAIRED$'; then
+            echo ""
+            ok "Both nodes paired."
+            break
+        fi
+
+        sleep 3
+        approve_i=$((approve_i + 1))
+        local missing
+        missing=$(echo "$result" | grep '^MISSING ' | head -1 | cut -d' ' -f2-)
+        printf "\r${CYAN}[openclaw]${NC} Waiting for node pairing [missing: %s] (%d/%d)" "${missing:-?}" "$approve_i" "$approve_timeout"
+    done
+    if [ $approve_i -eq $approve_timeout ]; then
+        echo ""
+        warn "Node pairing timed out after ~90s. Some nodes may not be paired yet."
+        warn "Run './openclaw.sh approve' manually once they appear."
+    fi
+    echo ""
+
+    wait_all_healthy
     echo ""
 
     configure_system_node

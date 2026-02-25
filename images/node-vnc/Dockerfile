@@ -39,7 +39,10 @@ RUN git clone --depth 1 https://github.com/novnc/noVNC.git /opt/noVNC && \
 COPY index.html /opt/noVNC/index.html
 
 # ---------- Supervisord ----------
-RUN uv pip install --system --python /usr/bin/python3 supervisor && \
+RUN uv venv /opt/supervisor-env && \
+    uv pip install --python /opt/supervisor-env/bin/python supervisor && \
+    ln -sf /opt/supervisor-env/bin/supervisord /usr/local/bin/supervisord && \
+    ln -sf /opt/supervisor-env/bin/supervisorctl /usr/local/bin/supervisorctl && \
     mkdir -p /etc/supervisor/conf.d /var/log/supervisor
 
 # ---------- VNC-specific environment ----------
@@ -51,6 +54,12 @@ ENV NO_VNC_PORT=6080
 ENV VNC_RESOLUTION=1280x1024
 ENV VNC_COL_DEPTH=24
 ENV VNC_PW=openclaw
+
+# ---------- Ensure openclaw is reachable at /usr/bin for supervisord ----------
+# The Homebrew home dir is 700 by default; make it traversable so the
+# non-root "openclaw" user can follow the symlink.
+RUN chmod o+x /home/linuxbrew && \
+    ln -sf /home/linuxbrew/.linuxbrew/bin/openclaw /usr/bin/openclaw
 
 # ---------- Supervisord config ----------
 COPY supervisord.conf /etc/supervisor/supervisord.conf

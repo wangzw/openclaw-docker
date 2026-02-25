@@ -16,8 +16,6 @@ RUN dnf install -y epel-release && \
         hostname \
         which \
         findutils \
-        python3 \
-        python3-pip \
         curl \
         wget \
         git \
@@ -39,6 +37,7 @@ RUN useradd -m -s /bin/bash linuxbrew && \
 USER linuxbrew
 RUN /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 USER root
+RUN ln -sf /home/linuxbrew/.linuxbrew/bin/python3 /usr/bin/python3
 ENV PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${PATH}"
 ENV HOMEBREW_PREFIX="/home/linuxbrew/.linuxbrew"
 ENV HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"

@@ -18,7 +18,6 @@ services:
       - OPENCLAW_STATE_DIR=${OPENCLAW_STATE_DIR:-/var/lib/openclaw/state}
       - OPENCLAW_CONFIG_PATH=${OPENCLAW_CONFIG_PATH:-/etc/openclaw/config.json}
       - NODE_ENV=${NODE_ENV:-production}
-      - AUTO_APPROVE_NAMES=${OPENCLAW_SYSTEM_NODE_NAME:-system-node},${OPENCLAW_VNC_NODE_NAME:-vnc-node}
     volumes:
       - ./data/gateway/data:/var/lib/openclaw
       - ./data/gateway/config:/etc/openclaw
