@@ -36,6 +36,8 @@ Build order matters: base → runtime → service images. This is enforced by `d
 
 ## Deploy / Run Commands
 
+`openclaw.sh` is self-contained — all Docker Compose definitions are embedded as heredocs inside the script. It generates `.openclaw-compose.yml` on the fly before each compose operation. No external compose files are needed; just copy the script, create a `.env`, and run.
+
 ```bash
 ./openclaw.sh deploy              # Full deploy: start, pair, configure, restart
 ./openclaw.sh deploy -v v1.2.3    # Deploy specific version

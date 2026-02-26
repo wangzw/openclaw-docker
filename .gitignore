@@ -1,3 +1,4 @@
 /data/
 .env
 .claude/settings.local.json
+.openclaw-compose.yml
