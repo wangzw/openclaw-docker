@@ -85,7 +85,7 @@ RUN go install github.com/steipete/blucli/cmd/blu@latest && \
     rm -rf /opt/go/pkg /opt/go/src
 
 # ---------- Skill dependencies (Python) ----------
-ENV PATH="/root/.local/bin:${PATH}"
+ENV PATH="/usr/local/bin:/root/.local/bin:${PATH}"
 RUN uv tool install nano-pdf && \
     uv tool install obsidian-cli && \
     ln -sf /root/.local/bin/obsidian /root/.local/bin/obsidian-cli
