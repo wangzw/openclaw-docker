@@ -53,6 +53,7 @@ ENV HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
 USER linuxbrew
 RUN brew install \
         gh \
+        glab \
         jq \
         ripgrep \
         ffmpeg \
@@ -75,13 +76,13 @@ RUN brew install \
 USER root
 
 # ---------- Skill dependencies (Go) ----------
-ENV GOPATH=/root/go
+ENV GOPATH=/opt/go
 ENV PATH="${GOPATH}/bin:${PATH}"
 RUN go install github.com/steipete/blucli/cmd/blu@latest && \
     go install github.com/steipete/sonoscli/cmd/sonos@latest && \
     go install github.com/steipete/eightctl/cmd/eightctl@latest && \
     go install github.com/Hyaxia/blogwatcher/cmd/blogwatcher@latest && \
-    rm -rf /root/go/pkg /root/go/src
+    rm -rf /opt/go/pkg /opt/go/src
 
 # ---------- Skill dependencies (Python) ----------
 ENV PATH="/root/.local/bin:${PATH}"
