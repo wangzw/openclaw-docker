@@ -5,7 +5,9 @@ LABEL maintainer="openclaw"
 LABEL description="OpenClaw runtime — base + openclaw CLI"
 
 ARG OPENCLAW_PKG_VERSION=latest
-RUN npm install -g openclaw@${OPENCLAW_PKG_VERSION} && \
+RUN npm install -g openclaw@${OPENCLAW_PKG_VERSION} \
+                   @anthropic-ai/claude-code \
+                   opencode-ai && \
     rm -rf /root/.npm /tmp/*
 
 ENV OPENCLAW_HOME=/var/lib/openclaw
